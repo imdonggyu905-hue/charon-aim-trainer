@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHARON AIM LAB</title>
+<style>
+:root{color-scheme:dark;--bg:#080b12;--panel:#111824;--line:#263447;--cyan:#58e0dc;--muted:#8d9bad;--white:#edf5ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 0%,#17263a 0,#080b12 58%);color:var(--white);font:14px Inter,system-ui,sans-serif;min-height:100vh}
+header{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#090e17cc}
+.logo{font-weight:900;letter-spacing:3px;font-size:19px}.logo span{color:var(--cyan)}.tag{color:var(--muted);font-size:11px;letter-spacing:2px}
+main{max-width:1440px;margin:auto;padding:24px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px}
+.panel{background:linear-gradient(145deg,#141e2b,#0d131e);border:1px solid var(--line);border-radius:12px;padding:18px}
+h2{font-size:12px;letter-spacing:2px;color:var(--muted);margin:0 0 16px}
+.mode{display:block;width:100%;text-align:left;background:#101a27;color:#c7d4e3;border:1px solid #26364a;border-radius:8px;padding:13px;margin:8px 0;cursor:pointer;font-weight:700}
+.mode small{display:block;color:var(--muted);font-weight:400;margin-top:5px}.mode.active{border-color:var(--cyan);background:#123039;color:#fff;box-shadow:inset 3px 0 var(--cyan)}
+label{display:block;color:var(--muted);font-size:12px;margin:14px 0 6px}input{width:100%;background:#080e17;border:1px solid var(--line);border-radius:7px;color:white;padding:10px}
+button.primary{width:100%;padding:13px;border:0;border-radius:8px;background:var(--cyan);color:#061316;font-weight:900;letter-spacing:1px;cursor:pointer;margin-top:14px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.stage{min-width:0}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.stat{background:#111a27;border:1px solid var(--line);border-radius:9px;padding:12px}.stat span{display:block;color:var(--muted);font-size:10px;letter-spacing:1px}.stat strong{display:block;font-size:24px;margin-top:5px}
+#arena{width:100%;height:min(65vh,620px);min-height:390px;display:block;border:1px solid #31465a;border-radius:12px;background:#080f1a;cursor:crosshair;touch-action:none}
+.arena-wrap{position:relative}.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;text-align:center}.overlay div{background:#08111cdd;border:1px solid #31465a;padding:20px 28px;border-radius:10px}.overlay b{font-size:22px;letter-spacing:2px}.overlay p{color:var(--muted);margin-bottom:0}
+.bottom{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:10px;gap:10px}.hint{line-height:1.7;color:var(--muted);font-size:12px;margin-top:16px}
+@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}.stats{grid-template-columns:repeat(2,1fr)}#arena{height:55vh;min-height:340px}header{padding:0 16px}}
+</style>
+</head>
+<body>
+<header><div class="logo">CHARON <span>AIM LAB</span></div><div class="tag">INDEPENDENT AIM TRAINER / BROWSER EDITION</div></header>
+<main>
+<aside class="panel">
+<h2>TRAINING MODES</h2>
+<button class="mode active" data-mode="flick">01 / MICRO FLICK<small>작은 표적 빠르게 클릭</small></button>
+<button class="mode" data-mode="track">02 / SPHERE TRACK<small>움직이는 표적 따라가기</small></button>
+<button class="mode" data-mode="precision">03 / PRECISION CLICK<small>정확도 중심 클릭 연습</small></button>
+<button class="mode" data-mode="switch">04 / REACTIVE SWITCH<small>표적 전환 대응 연습</small></button>
+<h2 style="margin-top:24px">SENSITIVITY</h2>
+<label for="dpi">DPI</label><input id="dpi" type="number" value="800" min="100" max="30000">
+<label for="sens">IN-GAME SENS</label><input id="sens" type="number" value="0.37" min="0.01" max="10" step="0.01">
+<label for="duration">SESSION (SECONDS)</label><input id="duration" type="number" value="60" min="15" max="300" step="15">
+<button class="primary" id="start">START TRAINING</button>
+<div class="hint">조작: 마우스로 표적을 조준하고 클릭하세요. 트래킹 모드는 표적 위에 조준점을 유지합니다. ESC 또는 STOP으로 종료할 수 있습니다.</div>
+</aside>
+<section class="stage">
+<div class="stats">
+<div class="stat"><span>SCORE</span><strong id="score">0</strong></div><div class="stat"><span>ACCURACY</span><strong id="accuracy">0%</strong></div><div class="stat"><span>HITS</span><strong id="hits">0</strong></div><div class="stat"><span>TIME LEFT</span><strong id="time">60</strong></div>
+</div>
+<div class="arena-wrap"><canvas id="arena"></canvas><div class="overlay" id="overlay"><div><b>READY TO TRAIN?</b><p>모드를 선택하고 START TRAINING을 누르세요.</p></div></div></div>
+<div class="bottom"><span id="modeName">MICRO FLICK</span><span id="message">정확하고 부드럽게 조준하세요.</span><span id="avg">AVG REACTION — ms</span></div>
+</section>
+</main>
+<script>
+(()=>{
+const canvas=document.getElementById('arena'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id);
+let W=0,H=0,mode='flick',running=false,score=0,hits=0,shots=0,left=60,last=0,spawnAt=0,target=null,raf=0,timer=null,rx=[],mouse={x:-100,y:-100},trackTime=0,trackStart=0;
+const names={flick:'MICRO FLICK',track:'SPHERE TRACK',precision:'PRECISION CLICK',switch:'REACTIVE SWITCH'};
+function resize(){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;W=r.width;H=r.height;canvas.width=Math.round(W*d);canvas.height=Math.round(H*d);ctx.setTransform(d,0,0,d,0,0);draw()}
+window.addEventListener('resize',resize);
+function newTarget(){const radius=mode==='precision'?12+Math.random()*18:mode==='flick'?13:mode==='switch'?17:22;target={x:radius+30+Math.random()*(W-2*radius-60),y:radius+30+Math.random()*(H-2*radius-60),r:radius,vx:(Math.random()-.5)*(mode==='track'?3.3:1.8),vy:(Math.random()-.5)*(mode==='track'?3.3:1.8),born:performance.now(),phase:Math.random()*6};spawnAt=performance.now()}
+function updateStats(){$('score').textContent=score;$('hits').textContent=hits;$('accuracy').textContent=(shots?Math.round(hits/shots*100):0)+'%';$('time').textContent=left;$('avg').textContent='AVG REACTION '+(rx.length?Math.round(rx.reduce((a,b)=>a+b,0)/rx.length):'—')+' ms'}
+function start(){if(running)return;mode=document.querySelector('.mode.active').dataset.mode;score=hits=shots=0;rx=[];left=Math.max(15,Math.min(300,Number($('duration').value)||60));running=true;last=performance.now();trackTime=0;newTarget();$('overlay').style.display='none';$('start').textContent='STOP TRAINING';$('modeName').textContent=names[mode];$('message').textContent='GO!';updateStats();timer=setInterval(()=>{if(!running)return;left--;updateStats();if(left<=0)stop()},1000);raf=requestAnimationFrame(loop)}
+function stop(){running=false;clearInterval(timer);cancelAnimationFrame(raf);$('start').textContent='START TRAINING';$('message').textContent='SESSION COMPLETE';$('overlay').style.display='flex';$('overlay').innerHTML='<div><b>SESSION COMPLETE</b><p>Score '+score+' · Accuracy '+(shots?Math.round(hits/shots*100):0)+'% · Hits '+hits+'</p><p>다시 연습하려면 START TRAINING을 누르세요.</p></div>';draw()}
+function loop(now){if(!running)return;const dt=Math.min(32,now-last);last=now;if(target){if(mode==='track'||mode==='switch'){target.x+=target.vx*dt*.06;target.y+=target.vy*dt*.06;if(target.x<target.r||target.x>W-target.r)target.vx*=-1;if(target.y<target.r||target.y>H-target.r)target.vy*=-1;if(mode==='switch'&&now-spawnAt>1700)newTarget()}if(mode==='track'){const d=Math.hypot(mouse.x-target.x,mouse.y-target.y);if(d<target.r+7)trackTime+=dt;else trackTime=Math.max(0,trackTime-dt*.35);score+=Math.floor(trackTime/100)*0;}}
+draw();raf=requestAnimationFrame(loop)}
+function draw(){if(!W||!H)return;ctx.clearRect(0,0,W,H);const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#0b1a2a');g.addColorStop(1,'#080d17');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='#1b3045';ctx.lineWidth=1;for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ctx.strokeStyle='#29465b';ctx.beginPath();ctx.moveTo(W/2-18,H/2);ctx.lineTo(W/2+18,H/2);ctx.moveTo(W/2,H/2-18);ctx.lineTo(W/2,H/2+18);ctx.stroke();
+if(target){const pulse=mode==='track'?Math.sin(performance.now()/120)*2:0;ctx.save();ctx.shadowColor='#58e0dc';ctx.shadowBlur=18;const grad=ctx.createRadialGradient(target.x-target.r*.3,target.y-target.r*.35,2,target.x,target.y,target.r+pulse);grad.addColorStop(0,'#e9ffff');grad.addColorStop(.25,'#71eeeb');grad.addColorStop(1,'#168d9b');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(target.x,target.y,target.r+pulse,0,Math.PI*2);ctx.fill();ctx.restore();ctx.strokeStyle='#c8ffff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(target.x,target.y,target.r+5,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#07121d';ctx.beginPath();ctx.arc(target.x,target.y,3,0,Math.PI*2);ctx.fill()}
+ctx.strokeStyle='#eafcff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(mouse.x,mouse.y,8,0,Math.PI*2);ctx.moveTo(mouse.x-14,mouse.y);ctx.lineTo(mouse.x-5,mouse.y);ctx.moveTo(mouse.x+5,mouse.y);ctx.lineTo(mouse.x+14,mouse.y);ctx.moveTo(mouse.x,mouse.y-14);ctx.lineTo(mouse.x,mouse.y-5);ctx.moveTo(mouse.x,mouse.y+5);ctx.lineTo(mouse.x,mouse.y+14);ctx.stroke()}
+canvas.addEventListener('pointermove',e=>{const r=canvas.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top});
+canvas.addEventListener('pointerdown',e=>{if(!running||!target||mode==='track')return;shots++;const d=Math.hypot(mouse.x-target.x,mouse.y-target.y);if(d<target.r){hits++;score+=Math.max(10,Math.round(100-d*2));rx.push(performance.now()-target.born);if(rx.length>30)rx.shift();newTarget()}else score=Math.max(0,score-2);updateStats()});
+canvas.addEventListener('pointerleave',()=>{mouse.x=mouse.y=-100});
+document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>{if(running)stop();document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');mode=b.dataset.mode;$('modeName').textContent=names[mode];$('overlay').style.display='flex';$('overlay').innerHTML='<div><b>'+names[mode]+'</b><p>START TRAINING을 눌러 시작하세요.</p></div>';draw()}));
+$('start').addEventListener('click',()=>running?stop():start());
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&running)stop()});
+resize();updateStats();
+})();
+</script>
+</body></html>
